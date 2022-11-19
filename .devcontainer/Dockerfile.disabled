@@ -1,0 +1,123 @@
+FROM ubuntu:latest
+
+MAINTAINER canonical
+
+ARG ANDROID_STUDIO_VERSION=4.2.2
+ARG JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
+ARG USER="android"
+ARG  FLUTTER_URL="https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.3.8-stable.tar.xz"
+ARG FLUTTER_VERSION=3.3.8
+
+CMD ["bash"]
+
+# RUN su
+
+RUN apt-get -y update
+RUN apt-get install -y software-properties-common
+RUN apt-get -y update
+
+# RUN apt-get intall add-apt-repository
+# RUN apt-get intall apt-file
+# RUN apt-get -y update
+
+RUN add-apt-repository universe
+RUN add-apt-repository multiverse
+RUN apt-get -y update
+
+RUN add-apt-repository ppa:git-core/ppa
+RUN add-apt-repository ppa:git-core/candidate
+RUN add-apt-repository ppa:mozillateam/ppa
+# RUN add-apt-repository ppa:webupd8team/java
+RUN add-apt-repository -y ppa:maarten-fonville/android-studio
+
+RUN apt-get -y update
+RUN apt-get -y upgrade
+
+
+RUN apt-get install -y curl git wget unzip libgconf-2-4 gdb libstdc++6 libglu1-mesa fonts-droid-fallback lib32stdc++6 python3
+RUN apt-get clean
+RUN apt-get -y update
+
+RUN apt-get install -y qemu-system-x86 libvirt-daemon-system libvirt-clients bridge-utils
+RUN apt-get -y update
+
+# RUN rm /etc/apt/preferences.d/nosnap.pref
+RUN apt-get install -y snapd
+RUN apt install -y ubuntu-snappy-cli
+RUN apt-get -y update
+
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys EA8CACC073C3DB2A
+RUN apt-get -y update
+
+RUN apt-get install -y default-jdk default-jre openjdk-8-jre-headless openjdk-11-jre-headless openjdk-17-jre-headless openjdk-18-jre-headless
+RUN apt-get -y update
+
+RUN apt-get install -y \
+        build-essential git nano neovim wget unzip sudo \
+        libc6 libncurses5 libstdc++6 lib32z1 libbz2-1.0 \
+        libxrender1 libxtst6 libxi6 libfreetype6 libxft2 xz-utils vim\
+        qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils\
+        qemu qemu-system-x86 libnotify4 libglu1-mesa libqt5widgets5 openjdk-8-jdk xvfb
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+RUN apt-get -y update
+
+RUN groupadd -g 1000 -r $USER
+RUN useradd -u 1000 -g 1000 --create-home -r $USER
+RUN adduser $USER libvirt
+RUN adduser $USER kvm
+RUN echo "$USER:$USER" | chpasswd
+RUN apt-get install -y sudo
+RUN echo "${USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-$USER
+RUN usermod -aG sudo $USER
+RUN usermod -aG plugdev $USER
+RUN apt-get -y update
+
+# VOLUME /androidstudio-data
+# RUN sudo hown $USER:$USER /androidstudio-data
+
+# COPY library-scripts/docker_entrypoint.sh /usr/local/bin/docker_entrypoint.sh
+# COPY library-scripts/ndkTests.sh /usr/local/bin/ndkTests.sh
+# COPY library-scripts/51-android.rules /etc/udev/rules.d/51-android.rules
+# COPY library-scripts/environment /etc/environment
+
+USER $USER
+WORKDIR /home/$USER
+RUN wget "$FLUTTER_URL" -O flutter.tar.xz
+RUN tar -xvf flutter.tar.xz
+ENV PATH="~/flutter/bin:~/flutter/bin/cache/dart-sdk/bin:${PATH}"
+
+# RUN su
+RUN sudo apt-get install -y android-studio
+RUN ln -s /studio-data/profile/AndroidStudio$ANDROID_STUDIO_VERSION .AndroidStudio$ANDROID_STUDIO_VERSION
+RUN ln -s /studio-data/Android Android
+RUN ln -s /studio-data/profile/android .android
+RUN ln -s /studio-data/profile/java .java
+RUN ln -s /studio-data/profile/gradle .gradle
+
+# install google-chrome
+RUN sudo touch /etc/apt/sources.list.d/google.list
+RUN sudo chmod u+w,g+w /etc/apt/sources.list.d/google.list
+RUN echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+RUN apt-get -y update
+RUN apt-get install -y google-chrome-stable
+
+ENV ANDROID_EMULATOR_USE_SYSTEM_LIBS=1
+WORKDIR /home/$USER
+EXPOSE 5000
+# ENTRYPOINT ["/usr/local/bin/docker_entrypoint.sh"]
+
+# Copy files to container and build
+# RUN mkdir /app/
+# COPY . /app/
+# WORKDIR /app/
+# RUN flutter build web
+# make server startup script executable and start the web server
+# RUN ["chmod", "+x", "/app/server/server.sh"]
+
+RUN flutter doctor
+RUN flutter channel stable
+RUN flutter upgrade
+RUN flutter config --enable-web
+RUN flutter build web
+
